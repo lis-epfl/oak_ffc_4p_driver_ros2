@@ -92,3 +92,9 @@ ros2 run oak_ffc_4p_driver_ros2 image_latency_node
 ```
 
 The total latency of the pipeline is the latency of the assembled image displayed in the terminal where we ran the driver launch file and the ROS2 transport latency displayed on the terminal where we ran `image_latency_node`. 
+
+To see the published images you can use `rqt_image_view`:
+``` shell script
+ros2 run rqt_image_view rqt_image_view
+```
+
