@@ -1,0 +1,15 @@
+oak_ffc_4p_driver_node: 
+  ros__parameters:
+    sync_master: "CAM_A" # which cam's clock is the master for syncing the other cams: "CAM_A", "CAM_B", "CAM_C", "CAM_D"
+    resolution: "400" # resolution of the cameras as string. look at oak_ffc_4p_driver.hpp for options (kMonoResOpts, kColorResOpts) 
+    fps: 30 # fps of the cameras
+    rgb: false # if false, do mono
+    auto_exposure_time: true # enable auto exposure time
+    exposure_time_us: 10000 # if not auto exposure time, use this exposure time
+    iso: 400 # set sensor sensitivity
+    image_info: true # show image info
+    auto_awb: false # enable auto white balance
+    awb_value: 4000 # if not auto_awb, use this value
+    sharpness_calibration_mode: false # to calibrate camera sharpness/focus
+    enable_upside_down: false # flip images upside down
+    max_size_fps: 10 # maximum number of previous images to keep when computing fps
