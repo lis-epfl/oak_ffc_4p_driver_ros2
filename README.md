@@ -77,8 +77,16 @@ ros2 launch oak_ffc_4p_driver_ros2 oak_ffc_4p_driver.launch.py
 ```
 The images will also display the latency up to the display point in the code and the fps to check if it matches the fps set in the config file `/config/cam_donfig.yaml`.
 
+### Publish each Cam Individually
+To publish each cam individually on a different topic in place of the assembled image, change the config file `/config/cam_config.yaml` and set `sharpness_calibration_mode` to `false` and `publish_cams_individually` to `true` then launch:
+``` shell script
+cd ~/ros2_ws/src
+source install/setup.bash
+ros2 launch oak_ffc_4p_driver_ros2 oak_ffc_4p_driver.launch.py
+```
+
 ## Test Latency
-To test the latency of the whole pipeline, change the config file `/config/cam_config.yaml` and set `sharpness_calibration_mode` to `false` and `image_info` to `true`. Then in one terminal run:
+To test the latency of the whole pipeline (only for the assembled image mode), change the config file `/config/cam_config.yaml` and set `sharpness_calibration_mode` to `false`, `image_info` to `true` and `publish_cams_individually` to `false`. Then in one terminal run:
 ``` shell script
 cd ~/ros2_ws/src
 source install/setup.bash

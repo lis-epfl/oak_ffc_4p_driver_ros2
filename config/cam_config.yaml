@@ -13,3 +13,4 @@ oak_ffc_4p_driver_node:
     sharpness_calibration_mode: false # to calibrate camera sharpness/focus
     enable_upside_down: false # flip images upside down
     max_size_fps: 10 # maximum number of previous images to keep when computing fps
+    publish_cams_individually: false # if true, publish each cam on its own topic in addition to the assembled image

@@ -114,6 +114,8 @@ private:
   bool sharpness_calibration_mode_;
   // flip the images upside down of all cameras
   bool enable_upside_down_;
+  // publish cams individually in addition to the assembled image
+  bool publish_cams_individually_;
 
   /** device variables **/
   // pointer to the device
@@ -125,6 +127,7 @@ private:
   rclcpp::Node::SharedPtr node_handle_;
   image_transport::ImageTransport image_transport_;
   image_transport::Publisher assembled_image_pub_;
+  std::map<std::string, image_transport::Publisher> cam_image_pub_;
 
   // thread variable to run the streaming
   std::thread streaming_thread_;

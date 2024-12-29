@@ -42,6 +42,7 @@ void FFC4PDriver::DeclareRosParameters() {
   declare_parameter("sharpness_calibration_mode", false);
   declare_parameter("enable_upside_down", false);
   declare_parameter("max_size_fps", 10);
+  declare_parameter("publish_cams_individually", false);
 }
 
 void FFC4PDriver::InitializeRosParameters() {
@@ -59,6 +60,8 @@ void FFC4PDriver::InitializeRosParameters() {
       get_parameter("sharpness_calibration_mode").as_bool();
   enable_upside_down_ = get_parameter("enable_upside_down").as_bool();
   max_size_fps_ = get_parameter("max_size_fps").as_int();
+  publish_cams_individually_ =
+      get_parameter("publish_cams_individually").as_bool();
 }
 
 bool FFC4PDriver::CreateDevice() {
@@ -167,6 +170,16 @@ void FFC4PDriver::InitializePipeline() {
   // create ros publisher
   if (sharpness_calibration_mode_) {
     RCLCPP_INFO(get_logger(), "Sharpness Calibration mode\n");
+  }
+  // create publishers for each cam
+  else if (publish_cams_individually_) {
+    for (const auto &cam_name_socket : name_socket_) {
+      std::string node_name = get_name();
+      std::string topic_name =
+          "/" + node_name + "/" + cam_name_socket.first + "/image_raw";
+      cam_image_pub_[cam_name_socket.first] =
+          image_transport_.advertise(topic_name, 1);
+    }
   } else {
     std::string node_name = get_name();
     std::string topic_name = "/" + node_name + "/image_raw";
@@ -185,7 +198,7 @@ void FFC4PDriver::StreamVideo() {
     if (image_info_) {
       std::cout << "--------------------" << '\n';
     }
-    static cv_bridge::CvImage assembled_cv_img;
+    static cv_bridge::CvImage assembled_cv_img, cv_img;
     static cv::Mat assembled_cv_mat = cv::Mat::zeros(720, 5120, CV_8UC3);
     static auto const msg_grp = device_->getOutputQueue("msgOut", 1, false);
 
@@ -227,6 +240,29 @@ void FFC4PDriver::StreamVideo() {
         total_width += img_width;
         max_height = std::max(max_height, img_height);
 
+        if (publish_cams_individually_) {
+
+          cv_img.header.stamp = get_clock()->now();
+          cv_img.header.frame_id = "depth ai";
+          cv_img.encoding = encoding;
+          cv_img.image = cv_image;
+
+          auto msg = cv_img.toImageMsg();
+
+          if (image_info_) {
+            auto time_now = std::chrono::steady_clock::now();
+            uint32_t latency_us =
+                std::chrono::duration_cast<std::chrono::microseconds>(time_now -
+                                                                      timestamp)
+                    .count();
+
+            std::cout << "latency for " << cam_name_socket.first
+                      << " in  ms: " << latency_us / 1000.0 << std::endl;
+          }
+
+          cam_image_pub_[cam_name_socket.first].publish(msg);
+        }
+
         if (image_info_) {
           double fps = CalculateFPS(image_buffer);
           std::cout << "Received " << cam_name_socket.first << ": "
@@ -246,7 +282,7 @@ void FFC4PDriver::StreamVideo() {
       for (const auto &cam_name_socket : name_socket_) {
         ShowImg(cam_name_socket.first, image_buffers_[cam_name_socket.first]);
       }
-    } else {
+    } else if (!publish_cams_individually_) {
       // prepare assembled image based on resolution and channel
       assembled_cv_mat = cv::Mat::zeros(max_height, total_width, image_type);
       int col_position = 0;
