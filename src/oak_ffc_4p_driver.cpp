@@ -240,7 +240,7 @@ void FFC4PDriver::StreamVideo() {
         total_width += img_width;
         max_height = std::max(max_height, img_height);
 
-        if (publish_cams_individually_) {
+        if (!sharpness_calibration_mode_ && publish_cams_individually_) {
 
           cv_img.header.stamp = get_clock()->now();
           cv_img.header.frame_id = "depth ai";

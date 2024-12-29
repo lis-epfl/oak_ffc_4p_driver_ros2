@@ -7,10 +7,10 @@ oak_ffc_4p_driver_node:
     auto_exposure_time: true # enable auto exposure time
     exposure_time_us: 10000 # if not auto exposure time, use this exposure time
     iso: 400 # set sensor sensitivity
-    image_info: true # show image info
+    image_info: false # show image info
     auto_awb: false # enable auto white balance
     awb_value: 4000 # if not auto_awb, use this value
-    sharpness_calibration_mode: false # to calibrate camera sharpness/focus
+    sharpness_calibration_mode: true # to calibrate camera sharpness/focus
     enable_upside_down: false # flip images upside down
     max_size_fps: 10 # maximum number of previous images to keep when computing fps
-    publish_cams_individually: false # if true, publish each cam on its own topic in addition to the assembled image
+    publish_cams_individually: true # if true, publish each cam on its own topic in addition to the assembled image
