@@ -100,7 +100,7 @@ private:
   // auto exposure time
   bool auto_exposure_time_;
   // exposure time in microseconds
-  bool exposure_time_us_;
+  int exposure_time_us_;
   // iso to control sensor sensitivity
   int iso_;
   // show image info or not
