@@ -1,5 +1,5 @@
-#ifndef OAK_FFC_4P_DRIVER_H_
-#define OAK_FFC_4P_DRIVER_H_
+#ifndef OAK_FFC_4P_DRIVER_CLASS_H_
+#define OAK_FFC_4P_DRIVER_CLASS_H_
 
 #include <chrono>
 #include <cv_bridge/cv_bridge.h>
