@@ -1,3 +1,6 @@
+#ifndef OAK_FFC_4P_DRIVER_H_
+#define OAK_FFC_4P_DRIVER_H_
+
 #include <chrono>
 #include <cv_bridge/cv_bridge.h>
 #include <depthai/build/version.hpp>
@@ -140,3 +143,5 @@ private:
 };
 
 } // namespace oak_ffc_4p_driver
+
+#endif
