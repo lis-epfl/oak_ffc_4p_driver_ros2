@@ -28,6 +28,14 @@ add_executable(image_latency_node src/image_latency_node.cpp)
 target_link_libraries(image_latency_node ${OpenCV_LIBS})
 ament_target_dependencies(image_latency_node ${DEPENDENCIES})
 
+add_executable(oak_sync_checker src/oak_sync_checker.cpp)
+target_link_libraries(oak_sync_checker
+  depthai::core
+  depthai::opencv
+  ${OpenCV_LIBS}
+  pthread
+)
+
 install(DIRECTORY
   launch
   config
@@ -38,6 +46,7 @@ install(TARGETS
   oak_ffc_4p_driver
   oak_ffc_4p_driver_node
   image_latency_node
+  oak_sync_checker
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
