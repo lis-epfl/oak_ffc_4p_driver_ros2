@@ -36,6 +36,14 @@ target_link_libraries(oak_sync_checker
   pthread
 )
 
+add_executable(oak_focus_checker src/oak_focus_checker.cpp)
+target_link_libraries(oak_focus_checker
+  depthai::core
+  depthai::opencv
+  ${OpenCV_LIBS}
+  pthread
+)
+
 install(DIRECTORY
   launch
   config
@@ -47,6 +55,7 @@ install(TARGETS
   oak_ffc_4p_driver_node
   image_latency_node
   oak_sync_checker
+  oak_focus_checker
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
