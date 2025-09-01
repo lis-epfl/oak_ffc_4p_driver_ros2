@@ -11,6 +11,7 @@
 #include <map>
 #include <opencv2/opencv.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 #include <sstream>
 #include <thread>
 
@@ -90,6 +91,11 @@ private:
   // format the duration for printing out
   std::string FormatDuration(const std::chrono::steady_clock::duration) const;
 
+  // compress image to JPEG format
+  sensor_msgs::msg::CompressedImage::SharedPtr
+  CompressImage(const cv::Mat& image, const std::string& encoding,
+                const std_msgs::msg::Header& header);
+
   /*-------------- member variables ---------------*/
   /** cameras configuration **/
   // which cam's clock acts as the master for syncing the 4 fisheye cameras
@@ -119,6 +125,10 @@ private:
   bool enable_upside_down_;
   // publish cams individually in addition to the assembled image
   bool publish_cams_individually_;
+  // whether to publish compressed images
+  bool compress_images_;
+  // JPEG compression quality (0-100)
+  int jpeg_quality_;
 
   /** device variables **/
   // pointer to the device
@@ -129,8 +139,14 @@ private:
   // publisher for the image
   rclcpp::Node::SharedPtr node_handle_;
   image_transport::ImageTransport image_transport_;
+
+  // Publishers for raw images (using image_transport)
   image_transport::Publisher assembled_image_pub_;
   std::map<std::string, image_transport::Publisher> cam_image_pub_;
+
+  // Publishers for compressed images (direct publishers)
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr assembled_compressed_pub_;
+  std::map<std::string, rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr> cam_compressed_pub_;
 
   // thread variable to run the streaming
   std::thread streaming_thread_;

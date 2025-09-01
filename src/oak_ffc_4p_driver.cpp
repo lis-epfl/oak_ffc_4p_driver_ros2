@@ -43,6 +43,8 @@ void FFC4PDriver::DeclareRosParameters() {
   declare_parameter("enable_upside_down", false);
   declare_parameter("max_size_fps", 10);
   declare_parameter("publish_cams_individually", false);
+  declare_parameter("compress_images", false);
+  declare_parameter("jpeg_quality", 80);
 }
 
 void FFC4PDriver::InitializeRosParameters() {
@@ -62,6 +64,8 @@ void FFC4PDriver::InitializeRosParameters() {
   max_size_fps_ = get_parameter("max_size_fps").as_int();
   publish_cams_individually_ =
       get_parameter("publish_cams_individually").as_bool();
+  compress_images_ = get_parameter("compress_images").as_bool();
+  jpeg_quality_ = get_parameter("jpeg_quality").as_int();
 }
 
 bool FFC4PDriver::CreateDevice() {
@@ -175,16 +179,71 @@ void FFC4PDriver::InitializePipeline() {
   else if (publish_cams_individually_) {
     for (const auto &cam_name_socket : name_socket_) {
       std::string node_name = get_name();
-      std::string topic_name =
-          "/" + node_name + "/" + cam_name_socket.first + "/image_raw";
-      cam_image_pub_[cam_name_socket.first] =
-          image_transport_.advertise(topic_name, 1);
+
+      if (compress_images_) {
+        // Create compressed image publisher
+        std::string compressed_topic_name =
+            "/" + node_name + "/" + cam_name_socket.first + "/compressed";
+        cam_compressed_pub_[cam_name_socket.first] =
+            create_publisher<sensor_msgs::msg::CompressedImage>(
+                compressed_topic_name, 1);
+      } else {
+        // Create raw image publisher using image_transport
+        std::string topic_name =
+            "/" + node_name + "/" + cam_name_socket.first + "/image_raw";
+        cam_image_pub_[cam_name_socket.first] =
+            image_transport_.advertise(topic_name, 1);
+      }
     }
   } else {
     std::string node_name = get_name();
-    std::string topic_name = "/" + node_name + "/image_raw";
-    assembled_image_pub_ = image_transport_.advertise(topic_name, 1);
+
+    if (compress_images_) {
+      // Create compressed image publisher
+      std::string compressed_topic_name = "/" + node_name + "/compressed";
+      assembled_compressed_pub_ =
+          create_publisher<sensor_msgs::msg::CompressedImage>(
+              compressed_topic_name, 1);
+    } else {
+      // Create raw image publisher using image_transport
+      std::string topic_name = "/" + node_name + "/image_raw";
+      assembled_image_pub_ = image_transport_.advertise(topic_name, 1);
+    }
   }
+
+  if (compress_images_) {
+    RCLCPP_INFO(get_logger(),
+                "Publishing compressed images with JPEG quality: %d\n",
+                jpeg_quality_);
+  }
+}
+
+sensor_msgs::msg::CompressedImage::SharedPtr
+FFC4PDriver::CompressImage(const cv::Mat &image, const std::string &encoding,
+                           const std_msgs::msg::Header &header) {
+  auto compressed_msg = std::make_shared<sensor_msgs::msg::CompressedImage>();
+  compressed_msg->header = header;
+
+  // Set format based on encoding
+  if (encoding == "bgr8" || encoding == "rgb8") {
+    compressed_msg->format = "jpeg";
+  } else if (encoding == "mono8") {
+    compressed_msg->format = "jpeg";
+  } else {
+    compressed_msg->format = "jpeg";
+  }
+
+  // Compress the image
+  std::vector<int> compression_params;
+  compression_params.push_back(cv::IMWRITE_JPEG_QUALITY);
+  compression_params.push_back(jpeg_quality_);
+
+  std::vector<uchar> buffer;
+  cv::imencode(".jpg", image, buffer, compression_params);
+
+  compressed_msg->data = buffer;
+
+  return compressed_msg;
 }
 
 void FFC4PDriver::StreamVideo() {
@@ -242,25 +301,46 @@ void FFC4PDriver::StreamVideo() {
 
         if (!sharpness_calibration_mode_ && publish_cams_individually_) {
 
-          cv_img.header.stamp = get_clock()->now();
-          cv_img.header.frame_id = "depth ai";
-          cv_img.encoding = encoding;
-          cv_img.image = cv_image;
+          std_msgs::msg::Header header;
+          header.stamp = get_clock()->now();
+          header.frame_id = "depth ai";
 
-          auto msg = cv_img.toImageMsg();
+          if (compress_images_) {
+            // Publish compressed image
+            auto compressed_msg = CompressImage(cv_image, encoding, header);
+            cam_compressed_pub_[cam_name_socket.first]->publish(
+                *compressed_msg);
 
-          if (image_info_) {
-            auto time_now = std::chrono::steady_clock::now();
-            uint32_t latency_us =
-                std::chrono::duration_cast<std::chrono::microseconds>(time_now -
-                                                                      timestamp)
-                    .count();
+            if (image_info_) {
+              auto time_now = std::chrono::steady_clock::now();
+              uint32_t latency_us =
+                  std::chrono::duration_cast<std::chrono::microseconds>(
+                      time_now - timestamp)
+                      .count();
+              std::cout << "latency for " << cam_name_socket.first
+                        << " (compressed) in ms: " << latency_us / 1000.0
+                        << std::endl;
+            }
+          } else {
+            // Publish raw image
+            cv_img.header = header;
+            cv_img.encoding = encoding;
+            cv_img.image = cv_image;
 
-            std::cout << "latency for " << cam_name_socket.first
-                      << " in  ms: " << latency_us / 1000.0 << std::endl;
+            auto msg = cv_img.toImageMsg();
+
+            if (image_info_) {
+              auto time_now = std::chrono::steady_clock::now();
+              uint32_t latency_us =
+                  std::chrono::duration_cast<std::chrono::microseconds>(
+                      time_now - timestamp)
+                      .count();
+              std::cout << "latency for " << cam_name_socket.first
+                        << " in ms: " << latency_us / 1000.0 << std::endl;
+            }
+
+            cam_image_pub_[cam_name_socket.first].publish(msg);
           }
-
-          cam_image_pub_[cam_name_socket.first].publish(msg);
         }
 
         if (image_info_) {
@@ -297,25 +377,44 @@ void FFC4PDriver::StreamVideo() {
         col_position += img_width;
       }
 
-      assembled_cv_img.header.stamp = get_clock()->now();
-      assembled_cv_img.header.frame_id = "depth ai";
-      assembled_cv_img.encoding = encoding;
-      assembled_cv_img.image = assembled_cv_mat;
+      std_msgs::msg::Header header;
+      header.stamp = get_clock()->now();
+      header.frame_id = "depth ai";
 
-      auto msg = assembled_cv_img.toImageMsg();
+      if (compress_images_) {
+        // Publish compressed assembled image
+        auto compressed_msg = CompressImage(assembled_cv_mat, encoding, header);
+        assembled_compressed_pub_->publish(*compressed_msg);
 
-      if (image_info_) {
-        auto time_now = std::chrono::steady_clock::now();
-        uint32_t latency_us =
-            std::chrono::duration_cast<std::chrono::microseconds>(
-                time_now - image_buffers_.begin()->second.back().second)
-                .count();
+        if (image_info_) {
+          auto time_now = std::chrono::steady_clock::now();
+          uint32_t latency_us =
+              std::chrono::duration_cast<std::chrono::microseconds>(
+                  time_now - image_buffers_.begin()->second.back().second)
+                  .count();
+          std::cout << "latency for assembled image (compressed) in ms: "
+                    << latency_us / 1000.0 << std::endl;
+        }
+      } else {
+        // Publish raw assembled image
+        assembled_cv_img.header = header;
+        assembled_cv_img.encoding = encoding;
+        assembled_cv_img.image = assembled_cv_mat;
 
-        std::cout << "latency for assembled image in ms: "
-                  << latency_us / 1000.0 << std::endl;
+        auto msg = assembled_cv_img.toImageMsg();
+
+        if (image_info_) {
+          auto time_now = std::chrono::steady_clock::now();
+          uint32_t latency_us =
+              std::chrono::duration_cast<std::chrono::microseconds>(
+                  time_now - image_buffers_.begin()->second.back().second)
+                  .count();
+          std::cout << "latency for assembled image in ms: "
+                    << latency_us / 1000.0 << std::endl;
+        }
+
+        assembled_image_pub_.publish(msg);
       }
-
-      assembled_image_pub_.publish(msg);
     }
   }
 }

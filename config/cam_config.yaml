@@ -10,7 +10,9 @@ oak_ffc_4p_driver_node:
     image_info: true # show image info
     auto_awb: true # enable auto white balance
     awb_value: 4000 # if not auto_awb, use this value
-    sharpness_calibration_mode: true # to calibrate camera sharpness/focus, does not publish cameras on any topics
+    sharpness_calibration_mode: false # to calibrate camera sharpness/focus, does not publish cameras on any topics
     enable_upside_down: false # flip images upside down
     max_size_fps: 10 # maximum number of previous images to keep when computing fps
     publish_cams_individually: false # if true, and sharpness_calibration_mode is false, publish each cam on its own topic in addition to the assembled image
+    compress_images: true # use jpeg compress 
+    jpeg_quality: 50 # between 0 and 100 where 100 is no compression 
