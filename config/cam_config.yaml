@@ -1,6 +1,6 @@
 oak_ffc_4p_driver_node: 
   ros__parameters:
-    sync_master: "CAM_A" # which cam's clock is the master for syncing the other cams: "CAM_A", "CAM_B", "CAM_C", "CAM_D"
+    sync_master: "CAM_C" # which cam's clock is the master for syncing the other cams: "CAM_A", "CAM_B", "CAM_C", "CAM_D"
     resolution: "800" # resolution of the cameras as string. look at oak_ffc_4p_driver.hpp for options (mono_res_opts, color_res_opts) 
     fps: 30 # fps of the cameras
     rgb: true # if false, do mono
@@ -15,4 +15,4 @@ oak_ffc_4p_driver_node:
     max_size_fps: 10 # maximum number of previous images to keep when computing fps
     publish_cams_individually: false # if true, and sharpness_calibration_mode is false, publish each cam on its own topic in addition to the assembled image
     compress_images: true # use jpeg compress 
-    jpeg_quality: 50 # between 0 and 100 where 100 is no compression 
+    jpeg_quality: 70 # between 0 and 100 where 100 is no compression 

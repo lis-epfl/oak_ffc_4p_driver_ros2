@@ -266,6 +266,8 @@ void FFC4PDriver::StreamVideo() {
       return;
     }
 
+    auto arrival_timestamp = get_clock()->now();
+
     total_width = 0;
     for (const auto &cam_name_socket : name_socket_) {
       auto packet = msg_data->get<dai::ImgFrame>(cam_name_socket.first);
@@ -378,7 +380,7 @@ void FFC4PDriver::StreamVideo() {
       }
 
       std_msgs::msg::Header header;
-      header.stamp = get_clock()->now();
+      header.stamp = arrival_timestamp;
       header.frame_id = "depth ai";
 
       if (compress_images_) {
