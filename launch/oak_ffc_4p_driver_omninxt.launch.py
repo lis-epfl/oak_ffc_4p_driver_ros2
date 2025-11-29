@@ -11,7 +11,7 @@ def generate_launch_description():
     config = os.path.join(
         get_package_share_directory('oak_ffc_4p_driver_ros2'),
         'config',
-        'cam_calibration_config.yaml'
+        'cam_omninxt_config.yaml'
     )
     oak_ffc_4p_driver_node = Node(
         package='oak_ffc_4p_driver_ros2',
