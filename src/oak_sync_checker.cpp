@@ -1,17 +1,3 @@
-// depthai_camera_test.cc
-//
-// DepthAI 4-camera sync test.
-// For each camera, builds a pipeline with that camera as the frame-sync master,
-// starts the device, waits for a grouped message, and reports success/failure.
-// On failure, prints a concise line to stderr: "FAILED: CAM_B[,CAM_...]".
-//
-// Style notes:
-// - Functions: UpperCamelCase
-// - Variables/params: lower_snake_case
-// - Constants: kConstantCase
-// - Avoid non-const globals; file-scope state in anonymous namespace
-// - Prefer '\n' over std::endl unless flush is required
-
 #include <algorithm>
 #include <chrono>
 #include <deque>
@@ -67,8 +53,9 @@ ExitCodeCreateDevice GetDeviceInfo() {
             << " available device(s)\n";
 
   for (size_t idx = 0; idx < device_info_vec.size(); ++idx) {
+    // CHANGED: getMxId() -> getDeviceId()
     std::cout << "[GetDeviceInfo] Device " << idx << ": "
-              << device_info_vec[idx].getMxId() << "\n";
+              << device_info_vec[idx].getDeviceId() << "\n";
   }
 
   if (device_info_vec.size() != 1) {
@@ -83,8 +70,11 @@ ExitCodeCreateDevice GetDeviceInfo() {
   return kSuccess;
 }
 
+// CHANGED: Function signature to use shared_ptr and return pipeline/queue
 ExitCodeCreateDevice CreateDeviceWithPipeline(
-    std::unique_ptr<dai::Device>& device,
+    std::shared_ptr<dai::Device>& device,
+    std::shared_ptr<dai::Pipeline>& pipeline,
+    std::shared_ptr<dai::MessageQueue>& outputQueue,
     const std::map<std::string, dai::CameraBoardSocket>& name_socket,
     int fps,
     const std::string& sync_master) {
@@ -98,22 +88,38 @@ ExitCodeCreateDevice CreateDeviceWithPipeline(
 
   cv::setNumThreads(1);
 
-  // Build the pipeline.
-  dai::Pipeline pipeline;
-  pipeline.setXLinkChunkSize(0);
+  // Initialize Device first (V3 Requirement)
+  try {
+    std::cout << "[CreateDeviceWithPipeline] Connecting to device...\n";
+    device = std::make_shared<dai::Device>(device_info, dai::UsbSpeed::SUPER_PLUS);
+    if (device == nullptr) {
+      std::cerr << "[CreateDeviceWithPipeline] ERROR: Device creation failed (nullptr)\n";
+      return kDeviceInitFailed;
+    }
+  } catch (const std::exception& e) {
+    std::cerr << "[CreateDeviceWithPipeline] ERROR: Device creation failed: " << e.what() << "\n";
+    return kDeviceInitFailed;
+  }
+
+  // Build the pipeline passing the device
+  pipeline = std::make_shared<dai::Pipeline>(device);
+  pipeline->setXLinkChunkSize(0);
   std::cout << "[CreateDeviceWithPipeline] Pipeline created, XLink chunk size set to 0\n";
 
-  auto sync = pipeline.create<dai::node::Sync>();
-  auto x_out = pipeline.create<dai::node::XLinkOut>();
-  x_out->setStreamName("msgOut");
-  sync->out.link(x_out->input);
-  std::cout << "[CreateDeviceWithPipeline] Sync and XLinkOut nodes created and linked\n";
+  auto sync = pipeline->create<dai::node::Sync>();
+
+  // REMOVED: XLinkOut node
+  // auto x_out = pipeline->create<dai::node::XLinkOut>();
+  // x_out->setStreamName("msgOut");
+  // sync->out.link(x_out->input);
+
+  std::cout << "[CreateDeviceWithPipeline] Sync node created\n";
 
   for (const auto& cam_name_socket : name_socket) {
     const std::string& cam_name = cam_name_socket.first;
     std::cout << "[CreateDeviceWithPipeline] Configuring camera: " << cam_name << "\n";
 
-    auto mono_cam = pipeline.create<dai::node::MonoCamera>();
+    auto mono_cam = pipeline->create<dai::node::MonoCamera>();
     mono_cam->setResolution(dai::MonoCameraProperties::SensorResolution::THE_800_P);
     mono_cam->setBoardSocket(cam_name_socket.second);
     mono_cam->setFps(fps);
@@ -135,28 +141,29 @@ ExitCodeCreateDevice CreateDeviceWithPipeline(
     std::cout << "[CreateDeviceWithPipeline]   - Auto exposure enabled\n";
   }
 
-  // Start the device with the pipeline.
+  // Create queue directly from node
+  outputQueue = sync->out.createOutputQueue();
+
+  // Start the pipeline
   try {
-    std::cout << "[CreateDeviceWithPipeline] Creating device with pipeline...\n";
-    device = std::make_unique<dai::Device>(pipeline, device_info,
-                                           dai::UsbSpeed::SUPER_PLUS);
-    if (device == nullptr) {
-      std::cerr << "[CreateDeviceWithPipeline] ERROR: Device creation failed (nullptr)\n";
-      return kDeviceInitFailed;
-    }
-    std::cout << "[CreateDeviceWithPipeline] Device created and pipeline started successfully\n";
+    std::cout << "[CreateDeviceWithPipeline] Starting pipeline...\n";
+    pipeline->start();
+    std::cout << "[CreateDeviceWithPipeline] Pipeline started successfully\n";
     return kSuccess;
   } catch (const std::exception& e) {
-    std::cerr << "[CreateDeviceWithPipeline] ERROR: Device creation failed: " << e.what() << "\n";
+    std::cerr << "[CreateDeviceWithPipeline] ERROR: Pipeline start failed: " << e.what() << "\n";
     return kDeviceInitFailed;
   }
 }
 
-bool TestImageReception(std::unique_ptr<dai::Device>& device, int timeout_ms) {
+// CHANGED: Takes output queue instead of device
+bool TestImageReception(std::shared_ptr<dai::MessageQueue>& msg_group, int timeout_ms) {
   std::cout << "[TestImageReception] Starting image reception test...\n";
 
-  auto msg_group = device->getOutputQueue("msgOut", 1, false);
-  std::cout << "[TestImageReception] Got output queue\n";
+  if(!msg_group) {
+      std::cerr << "[TestImageReception] Queue is null\n";
+      return false;
+  }
 
   try {
     bool has_timed_out = false;
@@ -206,9 +213,13 @@ int main() {
     std::cout << "Testing Camera " << idx << ": " << cam_name << " as sync master\n";
     std::cout << "========================================\n";
 
-    std::unique_ptr<dai::Device> device;
+    // CHANGED: Use shared_ptr and maintain lifecycle of pipeline
+    std::shared_ptr<dai::Device> device;
+    std::shared_ptr<dai::Pipeline> pipeline;
+    std::shared_ptr<dai::MessageQueue> queue;
+
     const oak_sync::ExitCodeCreateDevice create_rc =
-        oak_sync::CreateDeviceWithPipeline(device, oak_sync::kNameToSocket,
+        oak_sync::CreateDeviceWithPipeline(device, pipeline, queue, oak_sync::kNameToSocket,
                                            oak_sync::kTestFps, cam_name);
 
     if (create_rc != oak_sync::kSuccess) {
@@ -231,7 +242,7 @@ int main() {
 
     // Test image reception.
     std::cout << "[main] Testing image reception...\n";
-    success[idx] = oak_sync::TestImageReception(device, oak_sync::kTimeoutMs);
+    success[idx] = oak_sync::TestImageReception(queue, oak_sync::kTimeoutMs);
 
     std::cout << "[main] Test complete for " << cam_name
               << " as master, result: " << (success[idx] ? "SUCCESS" : "FAILED") << "\n";
@@ -288,4 +299,3 @@ int main() {
   // Return 0 for success, 1 for failure.
   return (successful_count == static_cast<int>(oak_sync::kNameToSocket.size())) ? 0 : 1;
 }
-

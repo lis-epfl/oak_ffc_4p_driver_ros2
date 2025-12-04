@@ -1,20 +1,3 @@
-// oak_focus_checker.cc
-//
-// Captures mono frames from an OAK FFC 4P, computes Brenner focus on a center
-// ROI (1/3 image), and either:
-//   - CHECK MODE (default): grab first frames, report out-of-focus cameras via
-//     concise stderr ("OUT_OF_FOCUS: CAM_...[,CAM_...]"), exit(1) if any fail.
-//   - STREAM MODE (--stream): live 2x2 view with per-camera ROI score/labels.
-//
-// CLI:
-//   oak_focus_checker [--stream] [--threshold=N] [--timeout-ms=M]
-//
-// Notes (Google C++ Style):
-//   - Functions: UpperCamelCase
-//   - Variables: lower_snake_case; data members end with underscore
-//   - Constants: kConstantCase
-//   - No exceptions escape main(); internal calls catch and return status.
-
 #include <algorithm>
 #include <chrono>
 #include <depthai/depthai.hpp>
@@ -34,7 +17,7 @@
 namespace oak_focus {
 
 // Default constants.
-constexpr double kDefaultThreshold = 500.0; // Brenner ROI threshold
+constexpr double kDefaultThreshold = 800.0; // Brenner ROI threshold
 constexpr int kDefaultTimeoutMs = 2000;     // Wait for first frames
 
 // Window dimensions for stream mode display.
@@ -121,8 +104,9 @@ public:
 
 private:
   // ---- Device / pipeline ----
-  std::unique_ptr<dai::Device> device_;
+  std::shared_ptr<dai::Device> device_; // Changed to shared_ptr for v3
   std::unique_ptr<dai::Pipeline> pipeline_;
+  std::shared_ptr<dai::MessageQueue> q_; // Added output queue member
   Options opts_;
 
   const std::map<std::string, dai::CameraBoardSocket> cams_ = {
@@ -143,7 +127,8 @@ private:
         std::cerr << "No devices found!\n";
         return false;
       }
-      device_ = std::make_unique<dai::Device>(infos[0]);
+      // Use make_shared for v3 compatibility
+      device_ = std::make_shared<dai::Device>(infos[0]);
       return true;
     } catch (const std::exception &e) {
       std::cerr << "Create device failed: " << e.what() << "\n";
@@ -153,14 +138,18 @@ private:
 
   bool InitializePipeline() {
     try {
-      pipeline_ = std::make_unique<dai::Pipeline>();
+      // Pass device to pipeline constructor
+      pipeline_ = std::make_unique<dai::Pipeline>(device_);
 
       auto sync = pipeline_->create<dai::node::Sync>();
-      auto xout = pipeline_->create<dai::node::XLinkOut>();
-      xout->setStreamName("sync_out");
-      sync->out.link(xout->input);
+
+      // Removed XLinkOut node logic for v3
+      // auto xout = pipeline_->create<dai::node::XLinkOut>();
+      // xout->setStreamName("sync_out");
+      // sync->out.link(xout->input);
 
       for (const auto &[name, socket] : cams_) {
+        // Deprecated but still working for now
         auto mono = pipeline_->create<dai::node::MonoCamera>();
         mono->setResolution(
             dai::MonoCameraProperties::SensorResolution::THE_720_P);
@@ -176,7 +165,11 @@ private:
         mono->initialControl.setManualExposure(10000, 400);
       }
 
-      device_->startPipeline(*pipeline_);
+      // Create output queue directly from node
+      q_ = sync->out.createOutputQueue();
+
+      // Start pipeline using pipeline method
+      pipeline_->start();
       return true;
     } catch (const std::exception &e) {
       std::cerr << "Start pipeline failed: " << e.what() << "\n";
@@ -231,15 +224,15 @@ private:
   std::optional<std::map<std::string, cv::Mat>> CaptureFirstFrames() {
     try {
       std::map<std::string, cv::Mat> frames;
-      auto q = device_->getOutputQueue("sync_out", /*maxSize=*/4,
-                                       /*blocking=*/false);
+      // Use member queue instead of getting by name
+      if(!q_) return std::nullopt;
 
       const auto start = std::chrono::steady_clock::now();
       const auto deadline = start + std::chrono::milliseconds(opts_.timeout_ms);
 
       while (std::chrono::steady_clock::now() < deadline) {
         bool timed_out = false;
-        auto grp = q->get<dai::MessageGroup>(std::chrono::milliseconds(200),
+        auto grp = q_->get<dai::MessageGroup>(std::chrono::milliseconds(200),
                                              timed_out);
         if (!grp)
           continue;
@@ -269,8 +262,10 @@ private:
 
   // ---- Stream helpers ----
   void StreamOnce(bool save_next) {
-    auto q = device_->getOutputQueue("sync_out", 1, false);
-    auto grp = q->tryGet<dai::MessageGroup>();
+    // Use member queue instead of getting by name
+    if(!q_) return;
+
+    auto grp = q_->tryGet<dai::MessageGroup>();
     if (!grp)
       return;
 

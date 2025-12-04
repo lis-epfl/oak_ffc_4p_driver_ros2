@@ -1,8 +1,8 @@
 oak_ffc_4p_driver_node: 
   ros__parameters:
-    sync_master: "CAM_A" # which cam's clock is the master for syncing the other cams: "CAM_A", "CAM_B", "CAM_C", "CAM_D"
+    sync_master: "CAM_D" # which cam's clock is the master for syncing the other cams: "CAM_A", "CAM_B", "CAM_C", "CAM_D"
     resolution: "800" # resolution of the cameras as string. look at oak_ffc_4p_driver.hpp for options (mono_res_opts, color_res_opts) 
-    fps: 20 # fps of the cameras
+    fps: 30 # fps of the cameras
     rgb: true # if false, do mono
     auto_exposure_time: true # enable auto exposure time
     exposure_time_us: 10000 # if not auto exposure time, use this exposure time
@@ -10,7 +10,7 @@ oak_ffc_4p_driver_node:
     image_info: true # show image info
     auto_awb: true # enable auto white balance
     awb_value: 4000 # if not auto_awb, use this value
-    sharpness_calibration_mode: false # to calibrate camera sharpness/focus, does not publish cameras on any topics
+    sharpness_calibration_mode: true # to calibrate camera sharpness/focus, does not publish cameras on any topics
     enable_upside_down: false # flip images upside down
     max_size_fps: 10 # maximum number of previous images to keep when computing fps
     publish_cams_individually: false # if true, and sharpness_calibration_mode is false, publish each cam on its own topic in addition to the assembled image

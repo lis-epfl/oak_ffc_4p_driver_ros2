@@ -132,9 +132,11 @@ private:
 
   /** device variables **/
   // pointer to the device
-  std::unique_ptr<dai::Device> device_ = nullptr;
+  std::shared_ptr<dai::Device> device_ = nullptr;
   // pointer to the pipeline
   std::unique_ptr<dai::Pipeline> pipeline_ = nullptr;
+  // output queue
+  std::shared_ptr<dai::MessageQueue> output_queue_; // CHANGED: DataOutputQueue -> MessageQueue
 
   // publisher for the image
   rclcpp::Node::SharedPtr node_handle_;

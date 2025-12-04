@@ -73,21 +73,23 @@ bool FFC4PDriver::CreateDevice() {
   RCLCPP_INFO(get_logger(), "FFC 4P Device Detecting\n");
   auto device_info_vec = dai::Device::getAllAvailableDevices();
   const auto usb_speed = dai::UsbSpeed::SUPER_PLUS;
-  auto open_vino_version = dai::OpenVINO::Version::VERSION_2021_4;
+
   if (device_info_vec.size() != 1) {
     RCLCPP_ERROR(get_logger(), "Multiple devices or No device detected\n");
     return false;
   }
-  device_ = std::make_unique<dai::Device>(open_vino_version,
-                                          device_info_vec.front(), usb_speed);
+  // CHANGED: Removed OpenVINO version from Device constructor (moved to pipeline config)
+  device_ = std::make_shared<dai::Device>(device_info_vec.front(), usb_speed);
+
   if (device_ == nullptr) {
     RCLCPP_ERROR(get_logger(), "device init failed\n");
     return false;
   }
   // print device infomation
-  std::cout << "===Connected to " << device_info_vec.front().getMxId()
+  // CHANGED: getMxId() -> getDeviceId()
+  std::cout << "===Connected to " << device_info_vec.front().getDeviceId()
             << std::endl;
-  auto mx_id = this->device_->getMxId();
+  auto mx_id = this->device_->getDeviceId(); // CHANGED: getMxId() -> getDeviceId()
   auto cameras = this->device_->getConnectedCameras();
   auto usb_speed_dev = this->device_->getUsbSpeed();
   auto eeprom_data = this->device_->readCalibration2().getEepromData();
@@ -107,14 +109,19 @@ bool FFC4PDriver::CreateDevice() {
 
 void FFC4PDriver::InitializePipeline() {
   // Init and Start pipeline
-  pipeline_ = std::make_unique<dai::Pipeline>();
+  pipeline_ = std::make_unique<dai::Pipeline>(device_);
+
+  // CHANGED: Set OpenVINO version here
+  pipeline_->setOpenVINOVersion(dai::OpenVINO::Version::VERSION_2021_4);
+
   pipeline_->setXLinkChunkSize(0);
   auto sync = pipeline_->create<dai::node::Sync>();
-  auto xOut = pipeline_->create<dai::node::XLinkOut>();
-  xOut->setStreamName("msgOut");
-  sync->out.link(xOut->input);
+
+  // Note: XLinkOut removed in v3 port
+
   for (const auto &cam_name_socket : name_socket_) {
     if (rgb_) { // RGB camera
+      // Note: ColorCamera is deprecated, consider migrating to dai::node::Camera if needed
       auto rgb_cam = pipeline_->create<dai::node::ColorCamera>();
       dai::ColorCameraProperties::SensorResolution rgb_resolution;
       if (color_res_opts_.find(resolution_) == color_res_opts_.end()) {
@@ -142,6 +149,7 @@ void FFC4PDriver::InitializePipeline() {
         rgb_cam->initialControl.setManualWhiteBalance(awb_value_);
       }
     } else {
+      // Note: MonoCamera is deprecated, consider migrating to dai::node::Camera if needed
       auto mono_cam = pipeline_->create<dai::node::MonoCamera>();
       dai::MonoCameraProperties::SensorResolution mono_resolution;
       if (mono_res_opts_.find(resolution_) == mono_res_opts_.end()) {
@@ -169,7 +177,12 @@ void FFC4PDriver::InitializePipeline() {
       }
     }
   }
-  device_->startPipeline(*pipeline_);
+
+  // Create output queue directly from node
+  output_queue_ = sync->out.createOutputQueue();
+
+  // Start pipeline
+  pipeline_->start();
 
   // create ros publisher
   if (sharpness_calibration_mode_) {
@@ -259,9 +272,10 @@ void FFC4PDriver::StreamVideo() {
     }
     static cv_bridge::CvImage assembled_cv_img, cv_img;
     static cv::Mat assembled_cv_mat = cv::Mat::zeros(720, 5120, CV_8UC3);
-    static auto const msg_grp = device_->getOutputQueue("msgOut", 1, false);
 
-    auto msg_data = msg_grp->get<dai::MessageGroup>();
+    // Get message from stored queue instead of getting queue by name
+    auto msg_data = output_queue_->get<dai::MessageGroup>();
+
     if (msg_data == nullptr) {
       return;
     }
