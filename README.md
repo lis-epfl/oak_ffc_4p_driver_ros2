@@ -5,7 +5,7 @@ It has been tested on **Ubuntu 22.04** and **ROS2 Humble**.
 
 ## Getting Started
 ### Install Dependencies 
-Make sure that `OpenCV` is installed (tested with version 4.5.4), and the ROS2 packages `image_transport` and `cv_bridge`. 
+Make sure that `OpenCV` is installed (tested with version 4.8.0, specifically for the Orin), and the ROS2 packages `image_transport` and `cv_bridge`. 
 ``` shell script
 sudo apt update
 sudo apt upgrade -y
@@ -15,23 +15,79 @@ sudo apt install ros-humble-image-transport-plugins
 sudo apt install ros-humble-cv-bridge
 ```
 
+### OpenCV installation
+Usually OpenCV 4.8.0 comes with jetpack 6.2.1, but if it doesn't/you're using your host pc, you need to install it from source:
+
+``` shell script
+# Remove existing OpenCV if present (optional but recommended to avoid conflicts)
+sudo apt remove libopencv-dev python3-opencv
+
+# Download Sources
+cd ~
+wget -O opencv.zip https://github.com/opencv/opencv/archive/4.8.0.zip
+wget -O opencv_contrib.zip https://github.com/opencv/opencv_contrib/archive/4.8.0.zip
+unzip opencv.zip
+unzip opencv_contrib.zip
+
+# Create Build Directory
+cd opencv-4.8.0
+mkdir build
+cd build
+
+# Configure with CMake (Standard configuration for Jetson/Ubuntu 22.04)
+cmake -D CMAKE_BUILD_TYPE=RELEASE \
+-D CMAKE_INSTALL_PREFIX=/usr/local \
+-D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib-4.8.0/modules \
+-D WITH_CUDA=ON \
+-D WITH_CUDNN=ON \
+-D WITH_CUBLAS=ON \
+-D WITH_TBB=ON \
+-D WITH_V4L=ON \
+-D WITH_GSTREAMER=ON \
+-D WITH_GTK=ON \
+-D WITH_OPENGL=ON \
+-D OPENCV_GENERATE_PKGCONFIG=ON \
+-D OPENCV_ENABLE_NONFREE=ON \
+-D BUILD_EXAMPLES=OFF ..
+
+# Build and Install (this may take some time)
+make -j$(nproc)
+sudo make install
+sudo ldconfig
+```
+
+### `cv_bridge` installation
+Since we installed a custom version of OpenCV, the standard ros-humble-cv-bridge (which links against OpenCV 4.5.4) will not work. We must rebuild it from source in your workspace.
+
+``` script shell
+# Create a workspace for cv_bridge if you don't have one, or use your main workspace
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+
+# Clone the vision_opencv repository (Humble branch)
+git clone -b humble https://github.com/ros-perception/vision_opencv.git
+
+# Build cv_bridge forcing it to find the new OpenCV 4.8.0
+cd ~/ros2_ws
+colcon build --symlink-install --packages-select cv_bridge --cmake-args -DOpenCV_DIR=/usr/local/lib/cmake/opencv4
+
+# Source the workspace
+source install/setup.bash
+```
+
 ### Install DepthAI
 Download depth core AI, tar, build and install:
 ``` shell script
 cd ~/Downloads
-wget https://github.com/luxonis/depthai-core/releases/download/v2.29.0/depthai-core-v2.29.0.tar.gz 
-tar -xvf depthai-core-v2.29.0.tar.gz
-rm depthai-core-v2.29.0.tar.gz
-cd depthai-core-v2.29.0
+wget https://github.com/luxonis/depthai-core/releases/download/v3.2.1/depthai-core-v3.2.1.tar.gz 
+tar -xvf depthai-core-v3.2.1.tar.gz
+rm depthai-core-v3.2.1.tar.gz
+cd depthai-core-v3.2.1
 mkdir build
 cd build
 cmake ..
 make -j$(nproc)
-make install # this doesn’t copy the include and library files into /usr/local/, so we will do that next
-cd /build/install/include
-sudo cp -r * /usr/local/include/
-cd ../lib/
-sudo cp -r * /usr/local/lib
+sudo make install 
 ```
 
 Then enable access to the device without needing to sudo, unplug the OAK FFC device, run the following commands, and then replug the device:
