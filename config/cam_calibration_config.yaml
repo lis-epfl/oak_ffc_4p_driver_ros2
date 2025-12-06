@@ -2,7 +2,7 @@ oak_ffc_4p_driver_node:
   ros__parameters:
     sync_master: "CAM_A" # which cam's clock is the master for syncing the other cams: "CAM_A", "CAM_B", "CAM_C", "CAM_D"
     resolution: "800" # resolution of the cameras as string. look at oak_ffc_4p_driver.hpp for options (mono_res_opts, color_res_opts) 
-    fps: 10 # fps of the cameras
+    fps: 5 # fps of the cameras
     rgb: true # if false, do mono
     auto_exposure_time: true # enable auto exposure time
     exposure_time_us: 10000 # if not auto exposure time, use this exposure time
