@@ -469,7 +469,7 @@ void FFC4PDriver::ShowImg(
 
     // Add the info text to the image
     cv::putText(image, info.str(), cv::Point(10, 30), cv::FONT_HERSHEY_PLAIN,
-                1.5, cv::Scalar(255));
+                1.5, cv::Scalar(0, 255, 0));
 
     // Display the image in an OpenCV window
     cv::imshow(cam_name, image);
