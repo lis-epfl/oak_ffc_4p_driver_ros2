@@ -26,9 +26,9 @@ enum ExitCodeCreateDevice {
   kDeviceNotFound = 3
 };
 
-constexpr int kTimeoutMs = 1000;      // Increased timeout for image reception
+constexpr int kTimeoutMs = 500;      // Increased timeout for image reception
 constexpr int kTestFps = 30;
-constexpr int kBetweenTestsMs = 1000; // Increased delay to allow device reset
+constexpr int kBetweenTestsMs = 200; // Increased delay to allow device reset
 
 // Camera name -> socket mapping (iteration order is key-sorted).
 const std::map<std::string, dai::CameraBoardSocket> kNameToSocket = {
