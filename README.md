@@ -77,6 +77,8 @@ source install/setup.bash
 
 ### Install DepthAI
 Download depth core AI, tar, build and install:
+
+**Note:** We build it as a shared library (`BUILD_SHARED_LIBS=ON`) in Release mode to ensure compatibility with the ROS 2 driver and avoid linkage errors.
 ``` shell script
 cd ~/Downloads
 wget https://github.com/luxonis/depthai-core/releases/download/v3.2.1/depthai-core-v3.2.1.tar.gz 
@@ -85,7 +87,8 @@ rm depthai-core-v3.2.1.tar.gz
 cd depthai-core-v3.2.1
 mkdir build
 cd build
-cmake ..
+# IMPORTANT: Build as SHARED libs to avoid CMake linkage errors later
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
 make -j$(nproc)
 sudo make install 
 ```
