@@ -77,6 +77,7 @@ source install/setup.bash
 
 ### Install DepthAI
 Download depth core AI, tar, build and install:
+
 **Note:** We build it as a shared library (`BUILD_SHARED_LIBS=ON`) in Release mode to ensure compatibility with the ROS 2 driver and avoid linkage errors.
 ``` shell script
 cd ~/Downloads
