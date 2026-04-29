@@ -129,6 +129,8 @@ private:
   bool compress_images_;
   // JPEG compression quality (0-100)
   int jpeg_quality_;
+  // [DBG] use OAK on-chip MJPEG VideoEncoder instead of host cv::imencode
+  bool use_chip_mjpeg_;
 
   /** device variables **/
   // pointer to the device
