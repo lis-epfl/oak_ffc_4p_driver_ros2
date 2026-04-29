@@ -10,6 +10,8 @@
   <depend>rclcpp</depend>
   <depend>image_transport</depend>
   <depend>cv_bridge</depend>
+  <depend>mcap_vendor</depend>
+  <depend>sensor_msgs</depend>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

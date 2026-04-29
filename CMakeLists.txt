@@ -14,6 +14,8 @@ find_package(OpenCV REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(cv_bridge REQUIRED)
+find_package(mcap_vendor REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 set(DEPENDENCIES
   rclcpp
@@ -57,8 +59,14 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+
+add_executable(oak_compressed_recorder src/oak_compressed_recorder.cpp)
+ament_target_dependencies(oak_compressed_recorder rclcpp sensor_msgs)
+target_link_libraries(oak_compressed_recorder mcap_vendor::mcap)
+
 install(TARGETS
   oak_ffc_4p_driver
+  oak_compressed_recorder
   oak_ffc_4p_driver_node
   image_latency_node
   oak_sync_checker
