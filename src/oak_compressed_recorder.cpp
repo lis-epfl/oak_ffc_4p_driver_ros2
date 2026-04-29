@@ -17,6 +17,8 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <csignal>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <fstream>
@@ -24,6 +26,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -90,17 +93,33 @@ public:
     drain_thread_ = std::thread([this]() { drain_loop(); });
     stats_thread_ = std::thread([this]() { stats_loop(); });
     RCLCPP_INFO(get_logger(), "recording to %s, chunk_size=%dMB", out_path.c_str(), chunk_mb_);
+
+    // Run finalize() at rclcpp shutdown — runs while spin() is still alive,
+    // i.e. before main() returns and before systemd's TimeoutStopSec=5s expires.
+    // The destructor also calls finalize() as a fallback; finalize() is idempotent.
+    rclcpp::on_shutdown([this]() { finalize(); });
   }
 
-  ~CompressedRecorder() {
+  ~CompressedRecorder() { finalize(); }
+
+  // Public so main() can also invoke after spin() returns.
+  // Idempotent: drains queue, joins worker threads, writes mcap footer, closes file.
+  // Uses fprintf+fflush directly (not RCLCPP_INFO) because rclcpp's logger may
+  // be torn down during shutdown.
+  void finalize() {
+    bool expected = false;
+    if (!finalize_started_.compare_exchange_strong(expected, true)) return;
     stop_.store(true);
     queue_cv_.notify_all();
     if (drain_thread_.joinable()) drain_thread_.join();
     if (stats_thread_.joinable()) stats_thread_.join();
     writer_.close();
+    file_.flush();
     file_.close();
-    RCLCPP_INFO(get_logger(), "final received=%zu  written=%zu  drops_overflow=%zu",
-                received_.load(), written_.load(), overflow_.load());
+    fprintf(stderr,
+            "[oak_compressed_recorder] finalize done. received=%zu written=%zu overflow=%zu\n",
+            received_.load(), written_.load(), overflow_.load());
+    fflush(stderr);
   }
 
 private:
@@ -207,14 +226,40 @@ private:
   std::atomic<size_t> received_ {0};
   std::atomic<size_t> written_ {0};
   std::atomic<size_t> overflow_ {0};
+
+  // shutdown plumbing
+  std::atomic<bool> finalize_started_ {false};
 };
+
+// Backup signal handlers — make sure SIGTERM/SIGINT *always* trigger
+// rclcpp::shutdown() so spin() returns and finalize() runs while we still
+// have time before systemd's TimeoutStopSec=5s SIGKILL.
+static std::atomic<bool> g_signal_received {false};
+static void backup_sig_handler(int sig) {
+  if (!g_signal_received.exchange(true)) {
+    const char *m = "[oak_compressed_recorder] SIG received, shutting down\n";
+    (void)write(2, m, strlen(m));
+  }
+  rclcpp::shutdown();
+}
 
 int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
+  // Install AFTER rclcpp::init so we override its handlers and guarantee shutdown.
+  struct sigaction sa{};
+  sa.sa_handler = backup_sig_handler;
+  sigemptyset(&sa.sa_mask);
+  sa.sa_flags = SA_RESTART;
+  sigaction(SIGTERM, &sa, nullptr);
+  sigaction(SIGINT,  &sa, nullptr);
+
   auto node = std::make_shared<CompressedRecorder>();
   rclcpp::executors::SingleThreadedExecutor exec;
   exec.add_node(node);
   exec.spin();
+  // spin() returned (signal-driven shutdown). finalize was called via
+  // on_shutdown; calling again is a no-op thanks to finalize_started_.
+  node->finalize();
   rclcpp::shutdown();
   return 0;
 }
