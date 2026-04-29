@@ -13,3 +13,6 @@
 .gitman.old
 
 html/
+
+# DepthAI SDK crash dumps (written under config/.cache/depthai/crashdumps/)
+.cache/
