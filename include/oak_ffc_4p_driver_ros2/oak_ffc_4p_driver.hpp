@@ -131,6 +131,9 @@ private:
   int jpeg_quality_;
   // [DBG] use OAK on-chip MJPEG VideoEncoder instead of host cv::imencode
   bool use_chip_mjpeg_;
+  // USB speed cap: "super_plus" (default, 10Gbps), "super" (5Gbps), "high"
+  // (480Mbps).  Drop to "super" on drones where the OAK link is marginal.
+  std::string usb_speed_str_;
 
   /** device variables **/
   // pointer to the device

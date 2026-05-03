@@ -47,6 +47,11 @@ void FFC4PDriver::DeclareRosParameters() {
   declare_parameter("compress_images", false);
   declare_parameter("jpeg_quality", 80);
   declare_parameter("use_chip_mjpeg", false);  // [DBG] Option 2 toggle
+  // USB negotiation cap.  "super_plus" (default, 10Gbps) is fastest; if the
+  // host<->OAK link is marginal at that speed (signal integrity issues from
+  // bad cable / connector / shielding), forcing "super" (5Gbps) avoids
+  // X_LINK_ERROR / USB-disconnect stalls.  Per-drone override via inventory.
+  declare_parameter("usb_speed", "super_plus");
 }
 
 void FFC4PDriver::InitializeRosParameters() {
@@ -69,13 +74,26 @@ void FFC4PDriver::InitializeRosParameters() {
   compress_images_ = get_parameter("compress_images").as_bool();
   jpeg_quality_ = get_parameter("jpeg_quality").as_int();
   use_chip_mjpeg_ = get_parameter("use_chip_mjpeg").as_bool();  // [DBG] Option 2
+  usb_speed_str_ = get_parameter("usb_speed").as_string();
 }
 
 bool FFC4PDriver::CreateDevice() {
   cv::setNumThreads(0);  // 0 = use all available cores
   RCLCPP_INFO(get_logger(), "FFC 4P Device Detecting\n");
   auto device_info_vec = dai::Device::getAllAvailableDevices();
-  const auto usb_speed = dai::UsbSpeed::SUPER_PLUS;
+  // Map the string parameter to the depthai enum.  Anything unrecognised falls
+  // back to SUPER_PLUS so existing deployments are unaffected.
+  dai::UsbSpeed usb_speed = dai::UsbSpeed::SUPER_PLUS;
+  if (usb_speed_str_ == "super") {
+    usb_speed = dai::UsbSpeed::SUPER;
+  } else if (usb_speed_str_ == "high") {
+    usb_speed = dai::UsbSpeed::HIGH;
+  } else if (usb_speed_str_ != "super_plus") {
+    RCLCPP_WARN(get_logger(),
+                "unknown usb_speed=%s, falling back to super_plus",
+                usb_speed_str_.c_str());
+  }
+  RCLCPP_INFO(get_logger(), "Requesting USB speed: %s", usb_speed_str_.c_str());
 
   if (device_info_vec.size() != 1) {
     RCLCPP_ERROR(get_logger(), "Multiple devices or No device detected\n");
